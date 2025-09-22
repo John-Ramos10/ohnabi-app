@@ -316,47 +316,63 @@ with tab_galeria:
     st.markdown("<div class='card'><div class='card-title'>Galería de fotos 📷</div></div>", unsafe_allow_html=True)
     remitente_foto = st.selectbox("¿Quién sube la foto?", ["John", "Abi"], key="remitente_foto")
     imagenes = st.file_uploader("", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="file_uploader")
-
     if "imagenes_subidas" not in st.session_state:
         st.session_state.imagenes_subidas = set()
-
+    
     if imagenes:
         st.markdown("¿Listo para subir las fotos seleccionadas?")
         if st.button("📤 Subir fotos a la galería"):
-
+            filas_existentes = sheet_rows()
+            enlaces_existentes = [fila[1].strip() for fila in filas_existentes if len(fila) >= 2]
+            
             for img in imagenes:
                 if img.name in st.session_state.imagenes_subidas:
                     continue
-
-                # Subida a Drive usando Drive API
-                file_metadata = {'name': img.name, 'parents': []}  # Padres vacíos por defecto
-                media = io.BytesIO(img.read())
-                file = drive.files().create(body=file_metadata, media_body=media, fields='id').execute()
-                file_id = file.get('id')
-                enlace = f"https://drive.google.com/uc?export=download&id={file_id}"
-
-                append_row([f"Foto subida por {remitente_foto}", enlace])
-                st.session_state.imagenes_subidas.add(img.name)
-                st.success(f"¡Foto '{img.name}' guardada en la galería!", icon="✅")
-
+                
+                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                    tmp_file.write(img.read())
+                    tmp_file.flush()
+                
+                # Subida con PyDrive
+                archivo_drive = drive.CreateFile({'title': img.name})
+                archivo_drive.SetContentFile(tmp_file.name)
+                archivo_drive.Upload()
+                archivo_drive.InsertPermission({'type': 'anyone', 'value': 'anyone', 'role': 'reader'})
+                
+                enlace = construir_enlace_drive(archivo_drive['id'])
+                
+                if enlace not in enlaces_existentes:
+                    append_row([f"Foto subida por {remitente_foto}", enlace])
+                    st.session_state.imagenes_subidas.add(img.name)
+                    st.success(f"¡Foto '{img.name}' guardada en la galería!", icon="✅")
+                else:
+                    st.warning(f"La imagen '{img.name}' ya fue subida antes. No se duplicó.")
+    
     st.markdown("#### Fotos guardadas:")
     fotos = obtener_fotos()
     if not fotos:
         st.info("Aún no hay fotos. Sube una para ver la galería 💖")
-
+    
     for (row_idx, texto, enlace) in fotos:
         mostrar_imagen_por_enlace(enlace, caption=texto)
         cols = st.columns([1,1,6])
-        if cols[0].button("🗑️ Eliminar", key=f"del_foto_{row_idx}"):
-            # Eliminación de Drive y hoja
-            try:
-                file_id = enlace.split("id=")[-1].strip()
-                drive.files().delete(fileId=file_id).execute()
-            except Exception:
-                pass
-            delete_row(row_idx)
-            st.success("Imagen eliminada correctamente 💥")
-            st.rerun()
+        with cols[0]:
+            if st.button("🗑️ Eliminar", key=f"del_foto_{row_idx}"):
+                try:
+                    if "id=" in enlace:
+                        id_archivo = enlace.split("id=")[-1].strip()
+                    elif "/d/" in enlace:
+                        id_archivo = enlace.split("/d/")[1].split("/")[0].strip()
+                    else:
+                        id_archivo = enlace.strip()
+                    archivo = drive.CreateFile({'id': id_archivo})
+                    archivo.Delete()
+                except Exception:
+                    pass
+                delete_row(row_idx)
+                st.success("Imagen eliminada correctamente 💥")
+                st.rerun()
+
 
 
 # ------------------- TAB JUEGOS -------------------
@@ -483,3 +499,4 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
     link = canciones[seleccion]
     st.markdown(f"▶️ <b>{seleccion}</b>", unsafe_allow_html=True)
     st.markdown(f"""<iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0' allow='autoplay; encrypted-media' allowfullscreen></iframe>""", unsafe_allow_html=True)
+
