@@ -17,11 +17,9 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# Cargar credenciales desde Streamlit Secrets
+# Credenciales desde Streamlit Secrets
 credenciales_dict = st.secrets["gcp_service_account"]
 credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=scope)
-
-# Inicializar cliente de Google Sheets
 cliente = gspread.authorize(credenciales)
 
 # ------------------- FUNCIONES GOOGLE SHEETS -------------------
@@ -58,21 +56,6 @@ def obtener_fotos():
             fotos.append((i, fila[0], fila[1]))
     return fotos
 
-# ------------------- FUNCIONES GOOGLE DRIVE -------------------
-def subir_imagen_drive(file_path, file_name, creds):
-    drive_service = build('drive', 'v3', credentials=creds)
-    file_metadata = {'name': file_name}
-    media = MediaFileUpload(file_path, mimetype='image/jpeg')
-    file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    file_id = file.get('id')
-    # Dar permiso público
-    drive_service.permissions().create(
-        fileId=file_id,
-        body={'type': 'anyone', 'role': 'reader'}
-    ).execute()
-    enlace = f"https://drive.google.com/uc?export=download&id={file_id}"
-    return enlace
-
 def construir_enlace_drive(enlace_o_id):
     if not enlace_o_id:
         return None
@@ -95,18 +78,39 @@ def mostrar_imagen_por_enlace(enlace, caption=""):
     except Exception as e:
         st.error(f"Error cargando imagen: {e}")
 
+# ------------------- SUBIR IMAGEN A DRIVE -------------------
+def subir_imagen_drive(ruta_local, nombre_archivo, credenciales):
+    try:
+        drive_service = build('drive', 'v3', credentials=credenciales)
+        file_metadata = {
+            'name': nombre_archivo,
+        }
+        media = MediaFileUpload(ruta_local, mimetype='image/jpeg')
+        archivo = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        file_id = archivo.get('id')
+        drive_service.permissions().create(
+            fileId=file_id,
+            body={'type': 'anyone', 'role': 'reader'}
+        ).execute()
+        enlace = f"https://drive.google.com/uc?export=download&id={file_id}"
+        return enlace
+    except Exception as e:
+        st.error(f"Error subiendo imagen a Drive: {e}")
+        return None
+
 # ------------------- CONFIG STREAMLIT -------------------
 st.set_page_config(page_title="ohnabi 💖", page_icon="💖", layout="centered")
+
 st.markdown("""
 <style>
 body { background: linear-gradient(135deg, #fff0f5 0%, #ffe6f2 100%); }
 .block-container { padding-top: 2rem; max-width: 700px; }
-h1, h2, h3 { text-align: center; color: #ff4d88; font-family: 'Arial', sans-serif; margin-bottom: 0.5em; }
-.card { background: none; border-radius: 15px; padding: 0; margin-bottom: 1.5em; text-align: center; }
-.card-title { background: #ffe6f2; border-radius: 25px; padding: 0.7em 2em; margin-bottom: 1em; color: #ff4d88; font-size: 1.4em; font-weight: bold; display: inline-block; box-shadow: 0 2px 12px #ffb3d1; animation: pulse 2s infinite; }
-@keyframes pulse { 0% { box-shadow: 0 2px 12px #ffb3d1; transform: translateY(0px); } 50% { box-shadow: 0 8px 32px #ff99cc; transform: translateY(-2px); } 100% { box-shadow: 0 2px 12px #ffb3d1; transform: translateY(0px); } }
-.stButton button { background: linear-gradient(90deg, #ff99cc 0%, #ff4d88 100%); color: white; border-radius: 10px; padding: 0.45em 1.0em; font-weight: bold; border: none; box-shadow: 0 2px 8px #ffb3d1; }
-.gallery-img { border-radius: 15px; box-shadow: 0 2px 12px #ffb3d1; margin: 8px 0; }
+h1,h2,h3 { text-align:center; color:#ff4d88; font-family:'Arial',sans-serif; margin-bottom:0.5em; }
+.card { background:none; border-radius:15px; padding:0; margin-bottom:1.5em; text-align:center; }
+.card-title { background:#ffe6f2; border-radius:25px; padding:0.7em 2em; margin-bottom:1em; color:#ff4d88; font-size:1.4em; font-weight:bold; display:inline-block; box-shadow:0 2px 12px #ffb3d1; animation:pulse 2s infinite; }
+@keyframes pulse { 0% { box-shadow:0 2px 12px #ffb3d1; transform:translateY(0px); } 50% { box-shadow:0 8px 32px #ff99cc; transform:translateY(-2px); } 100% { box-shadow:0 2px 12px #ffb3d1; transform:translateY(0px); } }
+.stButton button { background: linear-gradient(90deg, #ff99cc 0%, #ff4d88 100%); color:white; border-radius:10px; padding:0.45em 1em; font-weight:bold; border:none; box-shadow:0 2px 8px #ffb3d1; }
+.gallery-img { border-radius:15px; box-shadow:0 2px 12px #ffb3d1; margin:8px 0; }
 .centered { display:flex; justify-content:center; align-items:center; }
 .small-muted { font-size:0.9em; color:#a33a67; }
 </style>
@@ -154,22 +158,14 @@ st.markdown("---")
 
 # ------------------- SESIÓN -------------------
 def init_session():
-    if "imagenes_subidas" not in st.session_state:
-        st.session_state.imagenes_subidas = set()
-    if "edit_frase_row" not in st.session_state:
-        st.session_state.edit_frase_row = None
-    if "edit_nota_row" not in st.session_state:
-        st.session_state.edit_nota_row = None
-    if "edit_mensaje_row" not in st.session_state:
-        st.session_state.edit_mensaje_row = None
-    if "num_secreto" not in st.session_state:
-        st.session_state.num_secreto = random.randint(1, 10)
-    if "ppp_choice" not in st.session_state:
-        st.session_state.ppp_choice = None
-    if "ruleta_pregunta" not in st.session_state:
-        st.session_state.ruleta_pregunta = None
-    if "ruleta_respuesta" not in st.session_state:
-        st.session_state.ruleta_respuesta = ""
+    if "imagenes_subidas" not in st.session_state: st.session_state.imagenes_subidas = set()
+    if "edit_frase_row" not in st.session_state: st.session_state.edit_frase_row = None
+    if "edit_nota_row" not in st.session_state: st.session_state.edit_nota_row = None
+    if "edit_mensaje_row" not in st.session_state: st.session_state.edit_mensaje_row = None
+    if "num_secreto" not in st.session_state: st.session_state.num_secreto = random.randint(1, 10)
+    if "ppp_choice" not in st.session_state: st.session_state.ppp_choice = None
+    if "ruleta_pregunta" not in st.session_state: st.session_state.ruleta_pregunta = None
+    if "ruleta_respuesta" not in st.session_state: st.session_state.ruleta_respuesta = ""
 
 init_session()
 
@@ -177,199 +173,37 @@ init_session()
 tab_frases, tab_notas, tab_mensajes, tab_galeria, tab_juegos, tab_fechas, tab_deseos = st.tabs(
     ["💬 Frases", "💌 Notitas", "💜 Mensajes", "📷 Galería", "🎮 Juegos", "📅 Fechas", "🎁 Lista deseos"]
 )
-
-# -------------------------------- TAB FRASES --------------------------------
-with tab_frases:
-    st.markdown("<div class='card'><div class='card-title'>Frases favoritas 💬</div></div>", unsafe_allow_html=True)
-    remitente_frase = st.selectbox("¿Quién sube la frase?", ["John", "Abi"], key="remitente_frase")
-    nueva_frase = st.text_input("Escribe una frase especial", key="frase_nueva")
-    if st.button("Guardar frase 💬"):
-        if nueva_frase.strip():
-            append_row([f"{remitente_frase} dice:", nueva_frase])
-            st.success("¡Frase guardada!")
-            st.rerun()
-        else:
-            st.warning("Escribe algo antes de guardar.")
-    filas = sheet_rows()
-    st.markdown("#### Frases guardadas:")
-    for i, fila in enumerate(filas, start=1):
-        if len(fila) >= 2:
-            first, second = fila[0], fila[1]
-            if any(tag in first for tag in ["Foto", "Nota", "Mensaje", "Deseo"]):
-                continue
-            cols = st.columns([6,1,1])
-            with cols[0]:
-                st.info(f"**{first}** {second}")
-            with cols[1]:
-                if st.button("Editar", key=f"edit_frase_{i}"):
-                    st.session_state.edit_frase_row = i
-                    st.session_state.edit_frase_text = second
-                    st.rerun()
-            with cols[2]:
-                if st.button("Borrar", key=f"del_frase_{i}"):
-                    delete_row(i)
-                    st.session_state.edit_frase_row = None
-                    st.session_state.edit_frase_text = ""
-                    st.success("Frase eliminada 💥")
-                    st.rerun()
-    if st.session_state.edit_frase_row:
-        row_idx = st.session_state.edit_frase_row
-        nuevo_texto = st.text_input("Editar frase:", value=st.session_state.get("edit_frase_text", ""), key="fr_edit_input")
-        if st.button("💾 Guardar frase editada"):
-            update_cell(row_idx, 2, nuevo_texto)
-            st.session_state.edit_frase_row = None
-            st.session_state.edit_frase_text = ""
-            st.success("Frase editada ✅")
-            st.rerun()
-# -------------------------------- TAB NOTAS --------------------------------
-with tab_notas:
-    st.markdown("<div class='card'><div class='card-title'>Notita 💌</div></div>", unsafe_allow_html=True)
-    remitente_nota = st.selectbox("¿Quién manda la nota?", ["John", "Abi"], key="remitente_nota")
-    nueva_nota = st.text_area("Escribe tu nota aquí", key="nota_nueva")
-    if st.button("Enviar notita 💌"):
-        if nueva_nota.strip():
-            append_row([f"Nota de {remitente_nota}", nueva_nota])
-            st.success("¡Notita enviada!")
-            st.rerun()
-        else:
-            st.warning("¡Escribe algo bonito antes de enviar!")
-    st.markdown("#### Notitas guardadas:")
-    notas = find_rows_by_prefix("Nota")
-    for (row_idx, fila) in notas:
-        contenido = fila[1] if len(fila) >= 2 else ""
-        cols = st.columns([6,1,1])
-        with cols[0]:
-            st.info(f"**{fila[0]}** {contenido}")
-        with cols[1]:
-            if st.button("Editar", key=f"edit_nota_{row_idx}"):
-                st.session_state.edit_nota_row = row_idx
-                st.session_state.edit_nota_text = contenido
-                st.rerun()
-        with cols[2]:
-            if st.button("Borrar", key=f"del_nota_{row_idx}"):
-                delete_row(row_idx)
-                st.session_state.edit_nota_row = None
-                st.session_state.edit_nota_text = ""
-                st.success("Notita eliminada 💥")
-                st.rerun()
-    if st.session_state.edit_nota_row:
-        r = st.session_state.edit_nota_row
-        nuevo = st.text_area("Editar notita:", value=st.session_state.get("edit_nota_text", ""), key="nota_edit_input")
-        if st.button("💾 Guardar nota editada"):
-            update_cell(r, 2, nuevo)
-            st.session_state.edit_nota_row = None
-            st.session_state.edit_nota_text = ""
-            st.success("Notita editada ✅")
-            st.rerun()
-
-# -------------------------------- TAB MENSAJES --------------------------------
-with tab_mensajes:
-    st.markdown("<div class='card'><div class='card-title'>Mensaje bonito 💜</div></div>", unsafe_allow_html=True)
-    remitente_mensaje = st.selectbox("¿Quién manda el mensaje?", ["John", "Abi"], key="remitente_mensaje")
-    nuevo_mensaje = st.text_area("Escribe tu mensaje bonito aquí", key="mensaje_nuevo")
-    if st.button("Enviar mensaje 💜"):
-        if nuevo_mensaje.strip():
-            append_row([f"Mensaje de {remitente_mensaje}", nuevo_mensaje])
-            st.success("¡Mensaje enviado!")
-            st.rerun()
-        else:
-            st.warning("¡Escribe algo bonito antes de enviar!")
-    st.markdown("#### Mensajes guardados:")
-    mensajes = find_rows_by_prefix("Mensaje")
-    for (row_idx, fila) in mensajes:
-        contenido = fila[1] if len(fila) >= 2 else ""
-        cols = st.columns([6,1,1])
-        with cols[0]:
-            st.success(f"**{fila[0]}** {contenido}")
-        with cols[1]:
-            if st.button("Editar", key=f"edit_msg_{row_idx}"):
-                st.session_state.edit_mensaje_row = row_idx
-                st.session_state.edit_mensaje_text = contenido
-                st.rerun()
-        with cols[2]:
-            if st.button("Borrar", key=f"del_msg_{row_idx}"):
-                delete_row(row_idx)
-                st.session_state.edit_mensaje_row = None
-                st.session_state.edit_mensaje_text = ""
-                st.success("Mensaje eliminado 💥")
-                st.rerun()
-    if st.session_state.edit_mensaje_row:
-        r = st.session_state.edit_mensaje_row
-        nuevo = st.text_area("Editar mensaje:", value=st.session_state.get("edit_mensaje_text", ""), key="msg_edit_input")
-        if st.button("💾 Guardar mensaje editado"):
-            update_cell(r, 2, nuevo)
-            st.session_state.edit_mensaje_row = None
-            st.session_state.edit_mensaje_text = ""
-            st.success("Mensaje editado ✅")
-            st.rerun()
-
-# -------------------------------- TAB GALERIA --------------------------------
-with tab_galeria:
-    st.markdown("<div class='card'><div class='card-title'>Galería de fotos 📷</div></div>", unsafe_allow_html=True)
-    remitente_foto = st.selectbox("¿Quién sube la foto?", ["John", "Abi"], key="remitente_foto")
-    imagenes = st.file_uploader("", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key="file_uploader")
-    if imagenes:
-        st.markdown("¿Listo para subir las fotos seleccionadas?")
-        if st.button("📤 Subir fotos a la galería"):
-            filas_existentes = sheet_rows()
-            enlaces_existentes = [fila[1].strip() for fila in filas_existentes if len(fila) >= 2]
-            for img in imagenes:
-                if img.name in st.session_state.imagenes_subidas:
-                    continue
-                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                    tmp_file.write(img.read())
-                    tmp_file.flush()
-                    enlace = subir_imagen_drive(tmp_file.name, img.name, credenciales)
-                    if enlace not in enlaces_existentes:
-                        append_row([f"Foto subida por {remitente_foto}", enlace])
-                        st.session_state.imagenes_subidas.add(img.name)
-                        st.success(f"¡Foto '{img.name}' guardada en la galería!", icon="✅")
-                    else:
-                        st.warning(f"La imagen '{img.name}' ya fue subida antes. No se duplicó.")
-    st.markdown("#### Fotos guardadas:")
-    fotos = obtener_fotos()
-    if not fotos:
-        st.info("Aún no hay fotos. Sube una para ver la galería 💖")
-    for (row_idx, texto, enlace) in fotos:
-        mostrar_imagen_por_enlace(enlace, caption=texto)
-        cols = st.columns([1,1,6])
-        if cols[0].button("🗑️ Eliminar", key=f"del_foto_{row_idx}"):
-            delete_row(row_idx)
-            st.success("Imagen eliminada correctamente 💥")
-            st.rerun()
-
-# -------------------------------- TAB JUEGOS --------------------------------
+# ------------------- TAB Juegos -------------------
 with tab_juegos:
     st.markdown("<div class='card'><div class='card-title'>Juegos 🎮</div></div>", unsafe_allow_html=True)
-    juego = st.selectbox("🎯 ¿Cuál quieres jugar hoy?", ["Adivina el número", "Piedra, papel o tijera", "Ruleta de preguntas", "Adivinanzas"], key="juego_seleccionado")
+    juego = st.selectbox("🎯 ¿Cuál quieres jugar hoy?", 
+                         ["Adivina el número", "Piedra, papel o tijera", "Ruleta de preguntas", "Adivinanzas"], 
+                         key="juego_seleccionado")
 
-    # --- Adivina el número ---
     if juego == "Adivina el número":
         intento = st.number_input("🔢 Adivina el número (1-10)", min_value=1, max_value=10, step=1, key="intento_num")
         if st.button("✨ Probar suerte", key="btn_adivinar"):
             if intento == st.session_state.num_secreto:
                 st.success("🎉 ¡Bien hecho! Has adivinado el número secreto.")
-                st.session_state.num_secreto = random.randint(1, 10)
+                st.session_state.num_secreto = random.randint(1,10)
             else:
                 st.warning("💭 No es ese número... inténtalo de nuevo 💕")
 
-    # --- Piedra, papel o tijera ---
     elif juego == "Piedra, papel o tijera":
         opciones = ["🪨 Piedra", "📄 Papel", "✂️ Tijera"]
         eleccion = st.radio("🕹️ Elige tu jugada", opciones, key="jugada_usuario")
         if st.button("💥 Jugar", key="btn_jugar"):
             pc = random.choice(opciones)
-            st.write(f"La compu eligió: {pc}")
+            st.write(f"John eligió: {pc}")
             if eleccion == pc:
-                st.info("🤝 ¡Empate!")
+                st.info("🤝 ¡Empate! jsjs")
             elif (eleccion == "🪨 Piedra" and pc == "✂️ Tijera") or \
                  (eleccion == "📄 Papel" and pc == "🪨 Piedra") or \
                  (eleccion == "✂️ Tijera" and pc == "📄 Papel"):
-                st.success("🏆 ¡Ganaste!")
+                st.success("🏆 ¡Ganaste!, bien hecho mi amor")
             else:
-                st.error("😢 ¡Perdiste!")
+                st.error("😢 ¡Perdiste!, siguelo intentando")
 
-    # --- Ruleta de preguntas ---
     elif juego == "Ruleta de preguntas":
         preguntas = [
             "¿Qué fue lo primero que pensaste de mí?",
@@ -384,11 +218,11 @@ with tab_juegos:
             st.session_state.ruleta_respuesta = ""
         if st.session_state.ruleta_pregunta:
             st.info(st.session_state.ruleta_pregunta)
-            st.text_area("✍️ Tu respuesta:", key="ruleta_respuesta_input", value=st.session_state.get("ruleta_respuesta", ""))
+            st.text_area("✍️ Tu respuesta:", key="ruleta_respuesta_input", value=st.session_state.get("ruleta_respuesta",""))
             if st.button("💾 Guardar respuesta a la ruleta"):
-                resp_text = st.session_state.get("ruleta_respuesta_input", "").strip()
+                resp_text = st.session_state.get("ruleta_respuesta_input","").strip()
                 if resp_text:
-                    append_row([f"Respuesta a ruleta", resp_text])
+                    append_row(["Respuesta a ruleta", resp_text])
                     st.success("Respuesta guardada 💕")
                     st.session_state.ruleta_pregunta = None
                     st.session_state.ruleta_respuesta = ""
@@ -396,7 +230,6 @@ with tab_juegos:
                 else:
                     st.warning("Escribe algo antes de guardar.")
 
-    # --- Adivinanzas ---
     elif juego == "Adivinanzas":
         adivinanzas = {
             "Blanca por dentro, verde por fuera. Si quieres que te lo diga, espera.": "pera",
@@ -418,17 +251,17 @@ with tab_juegos:
             else:
                 st.error("Casi... intenta otra vez 💔")
 
-# -------------------------------- TAB FECHAS --------------------------------
+# ------------------- TAB Fechas -------------------
 with tab_fechas:
     st.markdown("<div class='card'><div class='card-title'>Fechas especiales</div></div>", unsafe_allow_html=True)
     if st.button("Ver fechas especiales"):
-        st.markdown("**Aniversario:** 27/03/2025 💓")
-        st.markdown("**Cumpleaños de Abi:** 17/02/2006 🎂")
-        st.markdown("**Primer encuentro:** 4/12/2024 💞")
-        st.markdown("**Primer beso:** 4/12/2024 💋")
-        st.markdown("**Cumpleaños de John:** 10/05/2005 🎉")
+        st.markdown(f"**Aniversario:** 27/03/2025 💓")
+        st.markdown(f"**Cumpleaños de Abi:** 17/02/2006 🎂")
+        st.markdown(f"**Primer encuentro:** 4/12/2024 💞")
+        st.markdown(f"**Primer beso:** 4/12/2024 💋")
+        st.markdown(f"**Cumpleaños de John:** 10/05/2005 🎉")
 
-# -------------------------------- TAB DESEOS --------------------------------
+# ------------------- TAB Lista de deseos -------------------
 with tab_deseos:
     st.markdown("<div class='card'><div class='card-title'>Lista de deseos 🎁</div></div>", unsafe_allow_html=True)
     nuevo_deseo = st.text_input("Agrega algo que quieran hacer juntos", key="deseo_nuevo")
@@ -439,10 +272,11 @@ with tab_deseos:
             st.rerun()
         else:
             st.warning("Escribe algo antes de agregar.")
+
     st.markdown("#### Deseos guardados:")
     deseos = find_rows_by_prefix("Deseo")
-    for (row_idx, fila) in deseos:
-        contenido = fila[1] if len(fila) >= 2 else ""
+    for row_idx, fila in deseos:
+        contenido = fila[1] if len(fila)>=2 else ""
         cols = st.columns([6,1])
         with cols[0]:
             st.write(f"💡 {contenido}")
@@ -452,7 +286,7 @@ with tab_deseos:
                 st.success("Deseo eliminado 💥")
                 st.rerun()
 
-# -------------------------------- MÚSICA --------------------------------
+# ------------------- Música -------------------
 st.markdown("---")
 st.markdown("<div class='card'><div class='card-title'>Nuestras músicas favoritas 🎶</div></div>", unsafe_allow_html=True)
 with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
