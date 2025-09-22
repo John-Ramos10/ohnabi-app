@@ -2,8 +2,6 @@ import streamlit as st
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import gspread
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
 import tempfile
 import os
 import requests
@@ -11,6 +9,8 @@ from PIL import Image
 import io
 import random
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 # --- Google Sheets & Drive Setup ---
 scope = [
@@ -18,21 +18,85 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# 🔑 Cambiado a la clave correcta de secrets
 credenciales_dict = st.secrets["google_service_account"]
 credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=scope)
 cliente = gspread.authorize(credenciales)
 
-# Inicializar Google Drive usando PyDrive
-gauth = GoogleAuth()
-# Se configura desde el diccionario de secrets en lugar de client_secrets.json
-gauth.credentials = credenciales
-gauth.Authorize()
-drive = GoogleDrive(gauth)
+# Inicializa Drive API
+drive_service = build('drive', 'v3', credentials=credenciales)
+
+def subir_archivo_drive(file_path, nombre_archivo):
+    """Sube un archivo a Drive y devuelve el enlace de descarga directa."""
+    file_metadata = {'name': nombre_archivo}
+    media = MediaFileUpload(file_path, resumable=True)
+    archivo = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    
+    # Dar permiso público
+    drive_service.permissions().create(
+        fileId=archivo['id'],
+        body={'type': 'anyone', 'role': 'reader'}
+    ).execute()
+    
+    enlace = f"https://drive.google.com/uc?export=download&id={archivo['id']}"
+    return enlace
+
+# --- Funciones para Google Sheets ---
+def hoja():
+    """Retorna la hoja activa (modifica según tu spreadsheet)"""
+    return cliente.open_by_key("TU_SPREADSHEET_ID").sheet1
+
+def sheet_rows():
+    return hoja().get_all_values()
+
+def append_row(values):
+    hoja().append_row(values)
+
+def update_cell(row_idx, col_idx, value):
+    hoja().update_cell(row_idx, col_idx, value)
+
+def delete_row(row_idx):
+    hoja().delete_rows(row_idx)
+
+def find_rows_by_prefix(prefix):
+    filas = sheet_rows()
+    resultados = []
+    for i, fila in enumerate(filas, start=1):
+        if len(fila) >= 1 and fila[0].startswith(prefix):
+            resultados.append((i, fila))
+    return resultados
+
+def obtener_fotos():
+    filas = sheet_rows()
+    fotos = []
+    for i, fila in enumerate(filas, start=1):
+        if len(fila) >= 2 and "Foto" in fila[0]:
+            fotos.append((i, fila[0], fila[1]))
+    return fotos
+
+def construir_enlace_drive(enlace_o_id):
+    if not enlace_o_id:
+        return None
+    if "id=" in enlace_o_id:
+        id_archivo = enlace_o_id.split("id=")[-1].strip()
+    elif "/d/" in enlace_o_id:
+        id_archivo = enlace_o_id.split("/d/")[1].split("/")[0].strip()
+    else:
+        id_archivo = enlace_o_id.strip()
+    return f"https://drive.google.com/uc?export=download&id={id_archivo}"
+
+def mostrar_imagen_por_enlace(enlace, caption=""):
+    try:
+        resp = requests.get(enlace)
+        if resp.status_code == 200:
+            img = Image.open(io.BytesIO(resp.content))
+            st.image(img, caption=caption, use_container_width=True)
+        else:
+            st.warning(f"No se pudo cargar la imagen ({resp.status_code})")
+    except Exception as e:
+        st.error(f"Error cargando imagen: {e}")
 
 # --- Streamlit Page Config ---
 st.set_page_config(page_title="ohnabi 💖", page_icon="💖", layout="centered")
-
 st.markdown("""
     <style>
     body {
@@ -94,7 +158,6 @@ st.markdown("""
     .small-muted { font-size:0.9em; color:#a33a67; }
     </style>
 """, unsafe_allow_html=True)
-
 # --- Funciones para Google Sheets ---
 def hoja():
     """Retorna la hoja activa (modifica según tu spreadsheet)"""
@@ -549,6 +612,7 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
+
 
 
 
