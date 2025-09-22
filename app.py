@@ -12,10 +12,9 @@ from PIL import Image
 import io
 import random
 
-# ---------------- CONFIG ----------------
+
 st.set_page_config(page_title="ohnabi 💖", page_icon="💖", layout="centered")
 
-# ---------------- ESTILOS ----------------
 st.markdown("""
     <style>
     body {
@@ -78,8 +77,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------- HELPERS SHEETS/DRIVE ----------------
-# Ruta a tus credenciales (ajusta si hace falta)
+
 ruta_credenciales = "C:/Users/John/OneDrive/Documentos/ohnabi/stone-botany-423821-g9-a2dd01bdd56f.json"
 
 scope = [
@@ -90,7 +88,6 @@ credenciales = ServiceAccountCredentials.from_json_keyfile_name(ruta_credenciale
 cliente = gspread.authorize(credenciales)
 hoja = cliente.open("ohnabi").sheet1 
 
-# PyDrive auth (usa local webserver flow si no hay credenciales guardadas)
 gauth = GoogleAuth()
 gauth.DEFAULT_SETTINGS['client_config_file'] = os.path.join(os.path.dirname(__file__), "client_secrets.json")
 gauth.LoadCredentialsFile("mycreds.txt")
@@ -111,7 +108,7 @@ def append_row(values):
     hoja.append_row(values)
 
 def update_cell(row_idx, col_idx, value):
-    # row_idx y col_idx son 1-indexed para gspread
+
     hoja.update_cell(row_idx, col_idx, value)
 
 def delete_row(row_idx):
@@ -144,7 +141,7 @@ def construir_enlace_drive(enlace_o_id):
         id_archivo = enlace_o_id.split("/d/")[1].split("/")[0].strip()
     else:
         id_archivo = enlace_o_id.strip()
-    # enlace de descarga directo
+
     return f"https://drive.google.com/uc?export=download&id={id_archivo}"
 
 def mostrar_imagen_por_enlace(enlace, caption=""):
@@ -160,15 +157,14 @@ def mostrar_imagen_por_enlace(enlace, caption=""):
         st.error(f"Error cargando imagen: {e}")
 
 
-# ---------------- CONTRASEÑA (mejor presentación) ----------------
-PASSWORD = "ohnabi2703"  # cámbiala si quieres
+PASSWORD = "ohnabi2703" 
 
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
 if not st.session_state.auth:
     st.markdown("<h2 style='text-align:center;'>🔐 Ingresa la contraseña</h2>", unsafe_allow_html=True)
-    # caja centrada y con placeholder
+
     cols = st.columns([1,2,1])
     with cols[1]:
         pwd = st.text_input("", type="password", placeholder="Escribe la contraseña...", key="pwd_input")
@@ -181,7 +177,7 @@ if not st.session_state.auth:
                 st.error("Contraseña incorrecta 💔")
     st.stop()
 
-# ---------------- FECHAS BASE / ENCABEZADO ----------------
+
 fecha_inicio = datetime(2025, 3, 27)
 aniversario = datetime(2026, 3, 27)
 cumple_ella = datetime(2026, 2, 17)
@@ -203,7 +199,7 @@ st.markdown("<h1>ohnabi 💖</h1>", unsafe_allow_html=True)
 st.markdown(f"<h2>Llevamos <span style='color:#ff4d88'>{dias_juntos}</span> días juntos 🥰</h2>", unsafe_allow_html=True)
 st.markdown("---")
 
-# ---------------- SESSION INIT ----------------
+
 def init_session():
     if "imagenes_subidas" not in st.session_state:
         st.session_state.imagenes_subidas = set()
@@ -224,12 +220,12 @@ def init_session():
 
 init_session()
 
-# ================== TABS PRINCIPALES ==================
+
 tab_frases, tab_notas, tab_mensajes, tab_galeria, tab_juegos, tab_fechas, tab_deseos = st.tabs(
     ["💬 Frases", "💌 Notitas", "💜 Mensajes", "📷 Galería", "🎮 Juegos", "📅 Fechas", "🎁 Lista deseos"]
 )
 
-# ---------------- FRASES ----------------
+
 with tab_frases:
     st.markdown("<div class='card'><div class='card-title'>Frases favoritas 💬</div></div>", unsafe_allow_html=True)
     remitente_frase = st.selectbox("¿Quién sube la frase?", ["John", "Abi"], key="remitente_frase")
@@ -242,7 +238,7 @@ with tab_frases:
         else:
             st.warning("Escribe algo antes de guardar.")
 
-    # Mostrar frases (filtramos filas que no sean fotos, notas, mensajes o deseos)
+
     filas = sheet_rows()
     st.markdown("#### Frases guardadas:")
     for i, fila in enumerate(filas, start=1):
@@ -251,11 +247,11 @@ with tab_frases:
             second = fila[1]
             if any(tag in first for tag in ["Foto", "Nota", "Mensaje", "Deseo"]):
                 continue
-            # Considerar que frases suelen tener formato "John dice:" en columna 1
+
             cols = st.columns([6,1,1])
             with cols[0]:
                 st.info(f"**{first}** {second}")
-            # botones editar / borrar with indices reales in sheet (i)
+
             with cols[1]:
                 if st.button("Editar", key=f"edit_frase_{i}"):
                     st.session_state.edit_frase_row = i
@@ -264,13 +260,12 @@ with tab_frases:
             with cols[2]:
                 if st.button("Borrar", key=f"del_frase_{i}"):
                     delete_row(i)
-                    # limpiar estado de edición para evitar cuadro huérfano
                     st.session_state.edit_frase_row = None
                     st.session_state.edit_frase_text = ""
                     st.success("Frase eliminada 💥")
                     st.rerun()
 
-    # Si se activó edición, mostrar input
+
     if st.session_state.edit_frase_row:
         row_idx = st.session_state.edit_frase_row
         nuevo_texto = st.text_input("Editar frase:", value=st.session_state.get("edit_frase_text", ""), key="fr_edit_input")
@@ -281,7 +276,7 @@ with tab_frases:
             st.success("Frase editada ✅")
             st.rerun()
 
-# ---------------- NOTITAS (persistentes) ----------------
+
 with tab_notas:
     st.markdown("<div class='card'><div class='card-title'>Notita 💌</div></div>", unsafe_allow_html=True)
     remitente_nota = st.selectbox("¿Quién manda la nota?", ["John", "Abi"], key="remitente_nota")
@@ -309,13 +304,13 @@ with tab_notas:
         with cols[2]:
             if st.button("Borrar", key=f"del_nota_{row_idx}"):
                 delete_row(row_idx)
-                # limpiar estado de edición para evitar cuadro huérfano
+
                 st.session_state.edit_nota_row = None
                 st.session_state.edit_nota_text = ""
                 st.success("Notita eliminada 💥")
                 st.rerun()
 
-    # edición de nota (si hay)
+
     if st.session_state.edit_nota_row:
         r = st.session_state.edit_nota_row
         nuevo = st.text_area("Editar notita:", value=st.session_state.get("edit_nota_text", ""), key="nota_edit_input")
@@ -326,7 +321,6 @@ with tab_notas:
             st.success("Notita editada ✅")
             st.rerun()
 
-# ---------------- MENSAJES BONITOS (persistentes) ----------------
 with tab_mensajes:
     st.markdown("<div class='card'><div class='card-title'>Mensaje bonito 💜</div></div>", unsafe_allow_html=True)
     remitente_mensaje = st.selectbox("¿Quién manda el mensaje?", ["John", "Abi"], key="remitente_mensaje")
@@ -354,7 +348,7 @@ with tab_mensajes:
         with cols[2]:
             if st.button("Borrar", key=f"del_msg_{row_idx}"):
                 delete_row(row_idx)
-                # limpiar estado de edición para evitar cuadro huérfano
+
                 st.session_state.edit_mensaje_row = None
                 st.session_state.edit_mensaje_text = ""
                 st.success("Mensaje eliminado 💥")
@@ -370,7 +364,6 @@ with tab_mensajes:
             st.success("Mensaje editado ✅")
             st.rerun()
 
-# ---------------- GALERÍA ----------------
 with tab_galeria:
     st.markdown("<div class='card'><div class='card-title'>Galería de fotos 📷</div></div>", unsafe_allow_html=True)
     remitente_foto = st.selectbox("¿Quién sube la foto?", ["John", "Abi"], key="remitente_foto")
@@ -387,7 +380,7 @@ with tab_galeria:
             for img in imagenes:
                 if img.name in st.session_state.imagenes_subidas:
                     continue
-                # subir
+
                 with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
                     tmp_file.write(img.read())
                     tmp_file.flush()
@@ -411,9 +404,9 @@ with tab_galeria:
         mostrar_imagen_por_enlace(enlace, caption=texto)
         cols = st.columns([1,1,6])
         if cols[0].button("🗑️ Eliminar", key=f"del_foto_{row_idx}"):
-            # borrar archivo en Drive y fila en hoja
+
             try:
-                # extraer id
+
                 if "id=" in enlace:
                     id_archivo = enlace.split("id=")[-1].strip()
                 elif "/d/" in enlace:
@@ -423,14 +416,12 @@ with tab_galeria:
                 archivo = drive.CreateFile({'id': id_archivo})
                 archivo.Delete()
             except Exception:
-                # no morir si falla borrar en drive
                 pass
-            # borrar fila
             delete_row(row_idx)
             st.success("Imagen eliminada correctamente 💥")
             st.rerun()
 
-# ---------------- JUEGOS ----------------
+
 with tab_juegos:
     st.markdown("<div class='card'><div class='card-title'>Juegos 🎮</div></div>", unsafe_allow_html=True)
     juego = st.selectbox("🎯 ¿Cuál quieres jugar hoy?", ["Adivina el número", "Piedra, papel o tijera", "Ruleta de preguntas", "Adivinanzas"], key="juego_seleccionado")
@@ -470,18 +461,16 @@ with tab_juegos:
         ]
         if st.button("🎡 Girar ruleta"):
             st.session_state.ruleta_pregunta = random.choice(preguntas)
-            st.session_state.ruleta_respuesta = ""  # limpiar respuesta previa
+            st.session_state.ruleta_respuesta = ""  
 
         if st.session_state.ruleta_pregunta:
             st.info(st.session_state.ruleta_pregunta)
             st.text_area("✍️ Tu respuesta:", key="ruleta_respuesta_input", value=st.session_state.get("ruleta_respuesta", ""))
-            # guardar respuesta
             if st.button("💾 Guardar respuesta a la ruleta"):
                 resp_text = st.session_state.get("ruleta_respuesta_input", "").strip()
                 if resp_text:
                     append_row([f"Respuesta a ruleta", resp_text])
                     st.success("Respuesta guardada 💕")
-                    # limpiar
                     st.session_state.ruleta_pregunta = None
                     st.session_state.ruleta_respuesta = ""
                     st.rerun()
@@ -514,7 +503,6 @@ with tab_juegos:
             else:
                 st.error("Casi... intenta otra vez 💔")
 
-# ---------------- FECHAS ----------------
 with tab_fechas:
     st.markdown("<div class='card'><div class='card-title'>Fechas especiales</div></div>", unsafe_allow_html=True)
     if st.button("Ver fechas especiales"):
@@ -524,7 +512,6 @@ with tab_fechas:
         st.markdown("**Primer beso:** 4/12/2024 💋")
         st.markdown("**Cumpleaños de John:** 10/05/2005 🎉")
 
-# ---------------- LISTA DE DESEOS ----------------
 with tab_deseos:
     st.markdown("<div class='card'><div class='card-title'>Lista de deseos 🎁</div></div>", unsafe_allow_html=True)
     nuevo_deseo = st.text_input("Agrega algo que quieran hacer juntos", key="deseo_nuevo")
@@ -550,7 +537,6 @@ with tab_deseos:
                 st.rerun()
 
 
-# ---------------- MÚSICA ----------------
 st.markdown("---")
 st.markdown("""
 <div class="card">
@@ -572,3 +558,4 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
+
