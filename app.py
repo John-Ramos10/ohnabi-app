@@ -4,7 +4,6 @@ from dateutil.relativedelta import relativedelta
 import gspread
 from google.oauth2.service_account import Credentials
 import tempfile
-import os
 import requests
 from PIL import Image
 import io
@@ -22,11 +21,20 @@ credenciales_dict = st.secrets["gcp_service_account"]
 credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=scope)
 cliente = gspread.authorize(credenciales)
 
-# Función para obtener la hoja
-def hoja():
-    return cliente.open_by_key("19UKz0oQC9RLGg68lg48u2T6JBLRK3y-Im0HQIBE9HK4").sheet1
+# Inicialización de Drive si quieres subir archivos (PyDrive)
+# from pydrive.auth import GoogleAuth
+# from pydrive.drive import GoogleDrive
+# gauth = GoogleAuth()
+# gauth.credentials = credenciales
+# drive = GoogleDrive(gauth)
 
-# Funciones de manejo de hoja
+# ------------------- FUNCIONES GOOGLE SHEETS -------------------
+
+SPREADSHEET_ID = "19UKz0oQC9RLGg68lg48u2T6JBLRK3y-Im0HQIBE9HK4"
+
+def hoja():
+    return cliente.open_by_key(SPREADSHEET_ID).sheet1
+
 def sheet_rows():
     return hoja().get_all_values()
 
@@ -95,63 +103,10 @@ h1, h2, h3 { text-align: center; color: #ff4d88; font-family: 'Arial', sans-seri
 .small-muted { font-size:0.9em; color:#a33a67; }
 </style>
 """, unsafe_allow_html=True)
-# --- Funciones para Google Sheets ---
-def hoja():
-    """Retorna la hoja activa (modifica según tu spreadsheet)"""
-    return cliente.open_by_key("TU_SPREADSHEET_ID").sheet1
 
-def sheet_rows():
-    return hoja().get_all_values()
+# ------------------- AUTENTICACIÓN -------------------
 
-def append_row(values):
-    hoja().append_row(values)
-
-def update_cell(row_idx, col_idx, value):
-    hoja().update_cell(row_idx, col_idx, value)
-
-def delete_row(row_idx):
-    hoja().delete_rows(row_idx)
-
-def find_rows_by_prefix(prefix):
-    filas = sheet_rows()
-    resultados = []
-    for i, fila in enumerate(filas, start=1):
-        if len(fila) >= 1 and fila[0].startswith(prefix):
-            resultados.append((i, fila))
-    return resultados
-
-def obtener_fotos():
-    filas = sheet_rows()
-    fotos = []
-    for i, fila in enumerate(filas, start=1):
-        if len(fila) >= 2 and "Foto" in fila[0]:
-            fotos.append((i, fila[0], fila[1]))
-    return fotos
-
-def construir_enlace_drive(enlace_o_id):
-    if not enlace_o_id:
-        return None
-    if "id=" in enlace_o_id:
-        id_archivo = enlace_o_id.split("id=")[-1].strip()
-    elif "/d/" in enlace_o_id:
-        id_archivo = enlace_o_id.split("/d/")[1].split("/")[0].strip()
-    else:
-        id_archivo = enlace_o_id.strip()
-    return f"https://drive.google.com/uc?export=download&id={id_archivo}"
-
-def mostrar_imagen_por_enlace(enlace, caption=""):
-    try:
-        resp = requests.get(enlace)
-        if resp.status_code == 200:
-            img = Image.open(io.BytesIO(resp.content))
-            st.image(img, caption=caption, use_container_width=True)
-        else:
-            st.warning(f"No se pudo cargar la imagen ({resp.status_code})")
-    except Exception as e:
-        st.error(f"Error cargando imagen: {e}")
-
-# --- Autenticación simple ---
-PASSWORD = "ohnabi2703" 
+PASSWORD = "ohnabi2703"
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
@@ -168,6 +123,8 @@ if not st.session_state.auth:
             else:
                 st.error("Contraseña incorrecta 💔")
     st.stop()
+
+# ------------------- FECHAS -------------------
 
 fecha_inicio = datetime(2025, 3, 27)
 aniversario = datetime(2026, 3, 27)
@@ -190,6 +147,7 @@ st.markdown("<h1>ohnabi 💖</h1>", unsafe_allow_html=True)
 st.markdown(f"<h2>Llevamos <span style='color:#ff4d88'>{dias_juntos}</span> días juntos 🥰</h2>", unsafe_allow_html=True)
 st.markdown("---")
 
+# ------------------- SESIÓN -------------------
 
 def init_session():
     if "imagenes_subidas" not in st.session_state:
@@ -210,6 +168,8 @@ def init_session():
         st.session_state.ruleta_respuesta = ""
 
 init_session()
+
+# ------------------- TABS -------------------
 
 
 tab_frases, tab_notas, tab_mensajes, tab_galeria, tab_juegos, tab_fechas, tab_deseos = st.tabs(
@@ -549,6 +509,7 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
+
 
 
 
