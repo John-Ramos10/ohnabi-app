@@ -2,49 +2,31 @@ import streamlit as st
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import gspread
+from google.oauth2.service_account import Credentials
 import tempfile
 import os
 import requests
 from PIL import Image
 import io
 import random
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 
-# --- Google Sheets & Drive Setup ---
+# ------------------- CONFIG GOOGLE -------------------
+
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
-credenciales_dict = st.secrets["google_service_account"]
+# Cargar credenciales desde Streamlit Secrets
+credenciales_dict = st.secrets["gcp_service_account"]
 credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=scope)
 cliente = gspread.authorize(credenciales)
 
-# Inicializa Drive API
-drive_service = build('drive', 'v3', credentials=credenciales)
-
-def subir_archivo_drive(file_path, nombre_archivo):
-    """Sube un archivo a Drive y devuelve el enlace de descarga directa."""
-    file_metadata = {'name': nombre_archivo}
-    media = MediaFileUpload(file_path, resumable=True)
-    archivo = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    
-    # Dar permiso público
-    drive_service.permissions().create(
-        fileId=archivo['id'],
-        body={'type': 'anyone', 'role': 'reader'}
-    ).execute()
-    
-    enlace = f"https://drive.google.com/uc?export=download&id={archivo['id']}"
-    return enlace
-
-# --- Funciones para Google Sheets ---
+# Función para obtener la hoja
 def hoja():
-    """Retorna la hoja activa (modifica según tu spreadsheet)"""
-    return cliente.open_by_key("TU_SPREADSHEET_ID").sheet1
+    return cliente.open_by_key("19UKz0oQC9RLGg68lg48u2T6JBLRK3y-Im0HQIBE9HK4").sheet1
 
+# Funciones de manejo de hoja
 def sheet_rows():
     return hoja().get_all_values()
 
@@ -95,68 +77,23 @@ def mostrar_imagen_por_enlace(enlace, caption=""):
     except Exception as e:
         st.error(f"Error cargando imagen: {e}")
 
-# --- Streamlit Page Config ---
+# ------------------- CONFIG STREAMLIT -------------------
+
 st.set_page_config(page_title="ohnabi 💖", page_icon="💖", layout="centered")
+
 st.markdown("""
-    <style>
-    body {
-        background: linear-gradient(135deg, #fff0f5 0%, #ffe6f2 100%);
-    }
-    .block-container {
-        padding-top: 2rem;
-        max-width: 700px;
-    }
-    h1, h2, h3 {
-        text-align: center;
-        color: #ff4d88;
-        font-family: 'Arial', sans-serif;
-        margin-bottom: 0.5em;
-    }
-    .card {
-        background: none;
-        border-radius: 15px;
-        padding: 0;
-        margin-bottom: 1.5em;
-        text-align: center;
-    }
-    .card-title {
-        background: #ffe6f2;
-        border-radius: 25px;
-        padding: 0.7em 2em;
-        margin-bottom: 1em;
-        color: #ff4d88;
-        font-size: 1.4em;
-        font-weight: bold;
-        display: inline-block;
-        box-shadow: 0 2px 12px #ffb3d1;
-        animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-        0% { box-shadow: 0 2px 12px #ffb3d1; transform: translateY(0px); }
-        50% { box-shadow: 0 8px 32px #ff99cc; transform: translateY(-2px); }
-        100% { box-shadow: 0 2px 12px #ffb3d1; transform: translateY(0px); }
-    }
-    .stButton button {
-        background: linear-gradient(90deg, #ff99cc 0%, #ff4d88 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 0.45em 1.0em;
-        font-weight: bold;
-        border: none;
-        box-shadow: 0 2px 8px #ffb3d1;
-    }
-    .gallery-img {
-        border-radius: 15px;
-        box-shadow: 0 2px 12px #ffb3d1;
-        margin: 8px 0;
-    }
-    .centered {
-        display:flex;
-        justify-content:center;
-        align-items:center;
-    }
-    .small-muted { font-size:0.9em; color:#a33a67; }
-    </style>
+<style>
+body { background: linear-gradient(135deg, #fff0f5 0%, #ffe6f2 100%); }
+.block-container { padding-top: 2rem; max-width: 700px; }
+h1, h2, h3 { text-align: center; color: #ff4d88; font-family: 'Arial', sans-serif; margin-bottom: 0.5em; }
+.card { background: none; border-radius: 15px; padding: 0; margin-bottom: 1.5em; text-align: center; }
+.card-title { background: #ffe6f2; border-radius: 25px; padding: 0.7em 2em; margin-bottom: 1em; color: #ff4d88; font-size: 1.4em; font-weight: bold; display: inline-block; box-shadow: 0 2px 12px #ffb3d1; animation: pulse 2s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 2px 12px #ffb3d1; transform: translateY(0px); } 50% { box-shadow: 0 8px 32px #ff99cc; transform: translateY(-2px); } 100% { box-shadow: 0 2px 12px #ffb3d1; transform: translateY(0px); } }
+.stButton button { background: linear-gradient(90deg, #ff99cc 0%, #ff4d88 100%); color: white; border-radius: 10px; padding: 0.45em 1.0em; font-weight: bold; border: none; box-shadow: 0 2px 8px #ffb3d1; }
+.gallery-img { border-radius: 15px; box-shadow: 0 2px 12px #ffb3d1; margin: 8px 0; }
+.centered { display:flex; justify-content:center; align-items:center; }
+.small-muted { font-size:0.9em; color:#a33a67; }
+</style>
 """, unsafe_allow_html=True)
 # --- Funciones para Google Sheets ---
 def hoja():
@@ -612,6 +549,7 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
+
 
 
 
