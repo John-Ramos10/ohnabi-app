@@ -2,7 +2,6 @@ import streamlit as st
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 import tempfile
@@ -11,19 +10,27 @@ import requests
 from PIL import Image
 import io
 import random
-import json
 from google.oauth2.service_account import Credentials
 
+# --- Google Sheets & Drive Setup ---
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
-credenciales_dict = st.secrets["gcp_service_account"]
+# 🔑 Cambiado a la clave correcta de secrets
+credenciales_dict = st.secrets["google_service_account"]
 credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=scope)
 cliente = gspread.authorize(credenciales)
 
+# Inicializar Google Drive usando PyDrive
+gauth = GoogleAuth()
+# Se configura desde el diccionario de secrets en lugar de client_secrets.json
+gauth.credentials = credenciales
+gauth.Authorize()
+drive = GoogleDrive(gauth)
 
+# --- Streamlit Page Config ---
 st.set_page_config(page_title="ohnabi 💖", page_icon="💖", layout="centered")
 
 st.markdown("""
@@ -88,36 +95,24 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-
-
-gauth = GoogleAuth()
-gauth.DEFAULT_SETTINGS['client_config_file'] = os.path.join(os.path.dirname(__file__), "client_secrets.json")
-gauth.LoadCredentialsFile("mycreds.txt")
-if gauth.credentials is None:
-    gauth.LocalWebserverAuth()
-elif gauth.access_token_expired:
-    gauth.Refresh()
-else:
-    gauth.Authorize()
-gauth.SaveCredentialsFile("mycreds.txt")
-drive = GoogleDrive(gauth)
+# --- Funciones para Google Sheets ---
+def hoja():
+    """Retorna la hoja activa (modifica según tu spreadsheet)"""
+    return cliente.open_by_key("TU_SPREADSHEET_ID").sheet1
 
 def sheet_rows():
-    """Devuelve todas las filas (incluyendo encabezado si existe)."""
-    return hoja.get_all_values()
+    return hoja().get_all_values()
 
 def append_row(values):
-    hoja.append_row(values)
+    hoja().append_row(values)
 
 def update_cell(row_idx, col_idx, value):
-
-    hoja.update_cell(row_idx, col_idx, value)
+    hoja().update_cell(row_idx, col_idx, value)
 
 def delete_row(row_idx):
-    hoja.delete_rows(row_idx)
+    hoja().delete_rows(row_idx)
 
 def find_rows_by_prefix(prefix):
-    """Busca filas donde la primera columna empieza con prefix."""
     filas = sheet_rows()
     resultados = []
     for i, fila in enumerate(filas, start=1):
@@ -134,7 +129,6 @@ def obtener_fotos():
     return fotos
 
 def construir_enlace_drive(enlace_o_id):
-    """Recibe un enlace (o id) y devuelve un enlace directo a la imagen en Drive."""
     if not enlace_o_id:
         return None
     if "id=" in enlace_o_id:
@@ -143,11 +137,9 @@ def construir_enlace_drive(enlace_o_id):
         id_archivo = enlace_o_id.split("/d/")[1].split("/")[0].strip()
     else:
         id_archivo = enlace_o_id.strip()
-
     return f"https://drive.google.com/uc?export=download&id={id_archivo}"
 
 def mostrar_imagen_por_enlace(enlace, caption=""):
-    """Muestra imagen desde un enlace de Drive, asegurando compatibilidad."""
     try:
         resp = requests.get(enlace)
         if resp.status_code == 200:
@@ -158,15 +150,13 @@ def mostrar_imagen_por_enlace(enlace, caption=""):
     except Exception as e:
         st.error(f"Error cargando imagen: {e}")
 
-
+# --- Autenticación simple ---
 PASSWORD = "ohnabi2703" 
-
 if "auth" not in st.session_state:
     st.session_state.auth = False
 
 if not st.session_state.auth:
     st.markdown("<h2 style='text-align:center;'>🔐 Ingresa la contraseña</h2>", unsafe_allow_html=True)
-
     cols = st.columns([1,2,1])
     with cols[1]:
         pwd = st.text_input("", type="password", placeholder="Escribe la contraseña...", key="pwd_input")
@@ -178,7 +168,6 @@ if not st.session_state.auth:
             else:
                 st.error("Contraseña incorrecta 💔")
     st.stop()
-
 
 fecha_inicio = datetime(2025, 3, 27)
 aniversario = datetime(2026, 3, 27)
@@ -560,6 +549,7 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
+
 
 
 
