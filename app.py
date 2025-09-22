@@ -13,10 +13,16 @@ import io
 import random
 import json
 
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive"
+]
+
 credenciales_dict = st.secrets["gcp_service_account"]
 credenciales = ServiceAccountCredentials.from_json_keyfile_dict(credenciales_dict, scope)
 cliente = gspread.authorize(credenciales)
 hoja = cliente.open("ohnabi").sheet1
+
 
 
 st.set_page_config(page_title="ohnabi 💖", page_icon="💖", layout="centered")
@@ -84,15 +90,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-ruta_credenciales = "C:/Users/John/OneDrive/Documentos/ohnabi/stone-botany-423821-g9-a2dd01bdd56f.json"
-
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
-credenciales = ServiceAccountCredentials.from_json_keyfile_name(ruta_credenciales, scope)
-cliente = gspread.authorize(credenciales)
-hoja = cliente.open("ohnabi").sheet1 
 
 gauth = GoogleAuth()
 gauth.DEFAULT_SETTINGS['client_config_file'] = os.path.join(os.path.dirname(__file__), "client_secrets.json")
@@ -564,5 +561,6 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
+
 
 
