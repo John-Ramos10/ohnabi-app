@@ -12,17 +12,16 @@ from PIL import Image
 import io
 import random
 import json
+from google.oauth2.service_account import Credentials
 
 scope = [
-    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
 credenciales_dict = st.secrets["gcp_service_account"]
-credenciales = ServiceAccountCredentials.from_json_keyfile_dict(credenciales_dict, scope)
+credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=scope)
 cliente = gspread.authorize(credenciales)
-hoja = cliente.open("ohnabi").sheet1
-
 
 
 st.set_page_config(page_title="ohnabi 💖", page_icon="💖", layout="centered")
@@ -561,6 +560,7 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
+
 
 
 
