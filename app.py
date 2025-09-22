@@ -4,27 +4,19 @@ from dateutil.relativedelta import relativedelta
 import gspread
 from google.oauth2.service_account import Credentials
 import tempfile
-import requests
 from PIL import Image
 import io
+import base64
 import random
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 
 # ------------------- CONFIG GOOGLE -------------------
 
-scope = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+scope = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Cargar credenciales desde Streamlit Secrets
 credenciales_dict = st.secrets["gcp_service_account"]
 credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=scope)
 cliente = gspread.authorize(credenciales)
-
-# Inicializar Google Drive API
-drive_service = build('drive', 'v3', credentials=credenciales)
 
 # ------------------- FUNCIONES GOOGLE SHEETS -------------------
 
@@ -60,39 +52,6 @@ def obtener_fotos():
         if len(fila) >= 2 and "Foto" in fila[0]:
             fotos.append((i, fila[0], fila[1]))
     return fotos
-
-def construir_enlace_drive(enlace_o_id):
-    if not enlace_o_id:
-        return None
-    if "id=" in enlace_o_id:
-        id_archivo = enlace_o_id.split("id=")[-1].strip()
-    elif "/d/" in enlace_o_id:
-        id_archivo = enlace_o_id.split("/d/")[1].split("/")[0].strip()
-    else:
-        id_archivo = enlace_o_id.strip()
-    return f"https://drive.google.com/uc?export=download&id={id_archivo}"
-
-def mostrar_imagen_por_enlace(enlace, caption=""):
-    try:
-        resp = requests.get(enlace)
-        if resp.status_code == 200:
-            img = Image.open(io.BytesIO(resp.content))
-            st.image(img, caption=caption, use_container_width=True)
-        else:
-            st.warning(f"No se pudo cargar la imagen ({resp.status_code})")
-    except Exception as e:
-        st.error(f"Error cargando imagen: {e}")
-
-def subir_archivo_drive(nombre_archivo, path_local):
-    file_metadata = {'name': nombre_archivo}
-    media = MediaFileUpload(path_local, resumable=True)
-    file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    # Dar permiso público
-    drive_service.permissions().create(
-        fileId=file['id'],
-        body={'type': 'anyone', 'role': 'reader'},
-    ).execute()
-    return construir_enlace_drive(file['id'])
 
 # ------------------- CONFIG STREAMLIT -------------------
 
@@ -146,11 +105,6 @@ hoy = datetime.now()
 dias_juntos = (hoy.date() - fecha_inicio.date()).days
 diferencia = relativedelta(hoy, fecha_inicio)
 meses_juntos = diferencia.years * 12 + diferencia.months
-proximo_mes = meses_juntos + 1
-fecha_proximo_mes = fecha_inicio + relativedelta(months=proximo_mes)
-dias_para_proximo_mes = (fecha_proximo_mes.date() - hoy.date()).days
-dias_1_anio = (aniversario.date() - hoy.date()).days
-dias_cumple_ella = (cumple_ella.date() - hoy.date()).days
 
 st.markdown("<h1>ohnabi 💖</h1>", unsafe_allow_html=True)
 st.markdown(f"<h2>Llevamos <span style='color:#ff4d88'>{dias_juntos}</span> días juntos 🥰</h2>", unsafe_allow_html=True)
@@ -184,8 +138,17 @@ tab_frases, tab_notas, tab_mensajes, tab_galeria, tab_juegos, tab_fechas, tab_de
     ["💬 Frases", "💌 Notitas", "💜 Mensajes", "📷 Galería", "🎮 Juegos", "📅 Fechas", "🎁 Lista deseos"]
 )
 
-# ... El resto del código de tabs (Frases, Notas, Mensajes, Fechas, Juegos, Deseos)
-# Solo en el tab de Galería cambiaremos la subida de imágenes:
+# ------------------- TAB GALERÍA -------------------
+
+def subir_imagen_base64(img_file, remitente):
+    img_bytes = img_file.read()
+    img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+    append_row([f"Foto subida por {remitente}", img_b64])
+
+def mostrar_imagen_base64(img_b64, caption=""):
+    img_bytes = base64.b64decode(img_b64)
+    img = Image.open(io.BytesIO(img_bytes))
+    st.image(img, caption=caption, use_container_width=True)
 
 with tab_galeria:
     st.markdown("<div class='card'><div class='card-title'>Galería de fotos 📷</div></div>", unsafe_allow_html=True)
@@ -195,40 +158,27 @@ with tab_galeria:
     if imagenes:
         st.markdown("¿Listo para subir las fotos seleccionadas?")
         if st.button("📤 Subir fotos a la galería"):
-            filas_existentes = sheet_rows()
-            enlaces_existentes = [fila[1].strip() for fila in filas_existentes if len(fila) >= 2]
+            fotos_guardadas = [f[2] for f in obtener_fotos()]
             for img in imagenes:
                 if img.name in st.session_state.imagenes_subidas:
                     continue
-
-                with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                    tmp_file.write(img.read())
-                    tmp_file.flush()
-                    enlace = subir_archivo_drive(img.name, tmp_file.name)
-
-                if enlace not in enlaces_existentes:
-                    append_row([f"Foto subida por {remitente_foto}", enlace])
-                    st.session_state.imagenes_subidas.add(img.name)
-                    st.success(f"¡Foto '{img.name}' guardada en la galería!", icon="✅")
-                else:
-                    st.warning(f"La imagen '{img.name}' ya fue subida antes. No se duplicó.")
+                subir_imagen_base64(img, remitente_foto)
+                st.session_state.imagenes_subidas.add(img.name)
+                st.success(f"¡Foto '{img.name}' guardada en la galería!", icon="✅")
 
     st.markdown("#### Fotos guardadas:")
     fotos = obtener_fotos()
     if not fotos:
         st.info("Aún no hay fotos. Sube una para ver la galería 💖")
-    for (row_idx, texto, enlace) in fotos:
-        mostrar_imagen_por_enlace(enlace, caption=texto)
+    for (row_idx, texto, img_b64) in fotos:
+        mostrar_imagen_base64(img_b64, caption=texto)
         cols = st.columns([1,1,6])
         if cols[0].button("🗑️ Eliminar", key=f"del_foto_{row_idx}"):
-            try:
-                id_archivo = enlace.split("id=")[-1].strip()
-                drive_service.files().delete(fileId=id_archivo).execute()
-            except Exception:
-                pass
             delete_row(row_idx)
             st.success("Imagen eliminada correctamente 💥")
             st.rerun()
+
+# ------------------- TAB JUEGOS -------------------
 
 with tab_juegos:
     st.markdown("<div class='card'><div class='card-title'>Juegos 🎮</div></div>", unsafe_allow_html=True)
@@ -294,12 +244,7 @@ with tab_juegos:
             "Si lo pones en una mano te sobra un palmo. Es fuerte, sano y peludo y a caricias lo calmas.":"un gato",
             "Oro parece, plata no es. ¿Qué es?": "plátano",
             "Tiene agujas pero no pincha, da la hora pero no es reloj.": "el pino",
-            "Largo, largo como un camino, y no tiene ni pies ni manos.":
-            "El río",
-            "Blanca por dentro, verde por fuera. Si quieres que te lo diga, espera.": "La pera",
-            "Vuelo de noche, duermo en el día y nunca verás plumas en ala mía.": "El murciélago",
-            "Cuanto más lavo, más sucia quedo.": "El agua",
-            "No es cabeza, pero tiene pecas; no es rana, pero salta en charcas.": "El sapo",
+            "Largo, largo como un camino, y no tiene ni pies ni manos.": "El río",
             "Es suave por dentro y peludo por fuera. Con un poco de esfuerzo, lo podrás meter dentro.":"un calcetin"
         }
         enigma, respuesta = random.choice(list(adivinanzas.items()))
@@ -311,6 +256,8 @@ with tab_juegos:
             else:
                 st.error("Casi... intenta otra vez 💔")
 
+# ------------------- TAB FECHAS -------------------
+
 with tab_fechas:
     st.markdown("<div class='card'><div class='card-title'>Fechas especiales</div></div>", unsafe_allow_html=True)
     if st.button("Ver fechas especiales"):
@@ -319,6 +266,8 @@ with tab_fechas:
         st.markdown("**Primer encuentro:** 4/12/2024 💞")
         st.markdown("**Primer beso:** 4/12/2024 💋")
         st.markdown("**Cumpleaños de John:** 10/05/2005 🎉")
+
+# ------------------- TAB DESEOS -------------------
 
 with tab_deseos:
     st.markdown("<div class='card'><div class='card-title'>Lista de deseos 🎁</div></div>", unsafe_allow_html=True)
@@ -344,6 +293,7 @@ with tab_deseos:
                 st.success("Deseo eliminado 💥")
                 st.rerun()
 
+# ------------------- MÚSICAS FAVORITAS -------------------
 
 st.markdown("---")
 st.markdown("""
@@ -366,14 +316,3 @@ with st.expander("🎶 Nuestras músicas favoritas", expanded=True):
         <iframe class='gallery-img' width='100%' height='150' src='{link}' frameborder='0'
         allow='autoplay; encrypted-media' allowfullscreen></iframe>
     """, unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
-
-
